@@ -5,20 +5,20 @@
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h4 class="modal-title"><span id="EditorDelete"></span> Event</h4>
+        <h4 class="modal-title">Edit Event</h4>
       </div>
       <div class="modal-body">
-        <p>Would you like to <span id="editordelete"></span> all occurrences in this event or just this occurrence?</p>
+        <p>Would you like to edit all occurrences in this event or just this occurrence?</p>
       </div>
       <div class="modal-footer">
-        <form style="{display: inline}">
-          <button formaction="#"
-          class="btn btn-default" id='allevent'>All</button>
-          <button formaction="#"
-          class="btn btn-default" id='thisevent'>This</button>
+          <a class="allevent" href="#">
+          <button class="btn btn-default alleventbtn"> 
+          All</button></a>
+          <a class="thisevent" href="#">
+          <button class="btn btn-default thiseventbtn"> 
+          This</button></a>
 
         <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-        </form>
       </div>
     </div>
 

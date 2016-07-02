@@ -1,0 +1,9 @@
+.t-btn{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+button{
+	outline: none !important;
+}

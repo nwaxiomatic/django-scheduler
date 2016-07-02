@@ -1,0 +1,25 @@
+body {
+  font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+
+a {
+  color: #000;
+}
+
+table, th, td {
+  border-left: 1px solid #dddddd;;
+}
+
+.row-centered {
+    text-align:center;
+}
+
+.modal-content {
+  color: #000;
+}
+
+.center {
+     float: none;
+     margin-left: auto;
+     margin-right: auto;
+}

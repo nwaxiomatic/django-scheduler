@@ -1,72 +1,44 @@
 {% load scheduletags %}
-
-<link rel='stylesheet' type='text/css' href='//cdnjs.cloudflare.com/ajax/libs/fullcalendar/2.3.1/fullcalendar.min.css' />
-<script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.10.3/moment.js'></script>
-<script type='text/javascript' src='http://tarruda.github.com/bootstrap-datetimepicker/assets/js/bootstrap-datetimepicker.min.js'></script>
-<script type='text/javascript' src='//cdnjs.cloudflare.com/ajax/libs/fullcalendar/2.3.1/fullcalendar.js'></script>
+{% load static from staticfiles %}
+<link rel="stylesheet" href="{% static 'schedule/css/modal.css' %}" />
+<link rel="stylesheet" href="{% static 'schedule/css/schedulefc.css' %}" />
+<link rel='stylesheet' type='text/css' href="{% static 'schedule/css/fullcalendar.min.css' %}" />
+<script type='text/javascript' src="{% static 'schedule/js/moment.min.js' %}"></script>
+<script type='text/javascript' src="{% static 'schedule/js/bootstrap-datetimepicker.min.js' %}"></script>
+<script type='text/javascript' src="{% static 'schedule/js/fullcalendar.js' %}"></script>
 <script type='text/javascript'>
+
 $(document).ready(function() {
 
-    function getEventViewURL(event){
-        if (event.existed){
-            if("{{ request.get_full_path }}".indexOf("/admin") != 0){
-                var view_url = "{% url 'occurrence' 12345 6789 %}".replace(/12345/, event.event_id).replace(/6789/, event.id);
-            }
-            else{
-                var view_url = "{% url 'admin:Scheduler_sessionoccurrencemodifier_change' 12345 %}".replace(/12345/, event.id)
-            }
+    function setChangeModalProperties(event){
+        if (event.event_editable){
+            $('.alleventbtn').prop("disabled", false);
         }
-        else {
-            if("{{ request.get_full_path }}".indexOf("/admin") != 0){
-                var view_url = "{% url 'event' 12345 %}".replace(/12345/, event.event_id);
-            }
-            else{
-                var view_url = "{% url 'admin:Scheduler_sessionscheduler_change' 12345 %}".replace(/12345/, event.event_id)
-            }
+        else{
+            $('.alleventbtn').prop("disabled", true);
         }
-        return view_url;
+        setModalURLs(event.event_edit_url, event.occ_edit_url)
     }
 
-    function setModalProperties(type, event){
-        if(type == 'edit'){
-            var tYPE = 'Edit';
-            var all_url = "{% url 'edit_event' calendar_slug 12345 %}".replace(/12345/, event.event_id);
-            if (event.existed){
-                var this_url = "{% url 'edit_occurrence' 12345 6789 %}".replace(/12345/, event.event_id).replace(/6789/, event.id);
-            }
-            else{
-                var this_url = "{% url 'edit_occurrence_by_date' 123 234 345 456 567 678 789 %}".replace(
-                        /123/, event.event_id).replace(
-                        /234/, event.year).replace(
-                        /345/, event.month).replace(
-                        /456/, event.day).replace(
-                        /567/, event.hour).replace(
-                        /678/, event.minute).replace(
-                        /789/, event.second);
-            }
+    function setDeleteModalProperties(event){
+        if (event.event_deletable){
+            $('.alleventbtn').prop("disabled", false);
         }
-        else if(type == 'delete'){
-            var tYPE = 'Delete';
-            var all_url = "{% url 'delete_event' 12345 %}".replace(/12345/, event.event_id);
-            if (event.existed){
-                var this_url = "{% url 'cancel_occurrence' 12345 6789 %}".replace(/12345/, event.event_id).replace(/6789/, event.id);
-            }
-            else{
-                var this_url = "{% url 'cancel_occurrence_by_date' 123 234 345 456 567 678 789 %}".replace(
-                        /123/, event.event_id).replace(
-                        /234/, event.year).replace(
-                        /345/, event.month).replace(
-                        /456/, event.day).replace(
-                        /567/, event.hour).replace(
-                        /678/, event.minute).replace(
-                        /789/, event.second);
-            }
+        else{
+            $('.alleventbtn').prop("disabled", true);
         }
-        
-        $('#allevent').attr('href', all_url);
-        $('#thisevent').attr('href', this_url);
-        $('#editordelete').html(type);
-        $('#EditorDelete').html(tYPE);
+        setModalURLs(event.event_delete_url, event.occ_delete_url)
+    }
+
+    function setModalURLs(all_url, this_url){
+        if(all_url){
+            all_url = setURLParameters(all_url, next_param);
+            $('.allevent').attr('href', all_url);
+        }
+        if(this_url){
+            this_url = setURLParameters(this_url, next_param);
+            $('.thisevent').attr('href', this_url);
+        }
     }
     
     function getCookie(name) {
@@ -98,12 +70,148 @@ $(document).ready(function() {
         }
     });
 
-    var date = new Date();
-    var d = date.getDate();
-    var m = date.getMonth();
-    var y = date.getFullYear();
+    function getURLParams(url){
+        var sPageURL = url.split('?');
+        var sParams = {};
+        if (sPageURL.length < 2) return sParams;
+        sPageURL = sPageURL[1];
+        var sURLVariables = sPageURL.split('&');
+        for (var i = 0; i < sURLVariables.length; i++){
+            var sParam = sURLVariables[i].split('=');
+            sParams[sParam[0]] =sParam[1];
+        }
+        return sParams;
+    }
+
+    function getURLParameter(sParam, other){
+        var sParams = getURLParams(window.location.href);
+        if (sParam in sParams) return sParams[sParam];
+        return other;
+    }
+
+    function setURLParameters(url, sParams){
+        var baseURL = url.split('?')[0];
+        var sParams = $.extend(getURLParams(url), sParams);
+        var keys = Object.keys(sParams);
+        var keyVals = keys.map(function(v) { 
+            return v + '=' + sParams[v]; 
+        });
+        return baseURL + '?' + keyVals.join('&');
+    }
+
+    function setURLPath(sParams){
+        var keys = Object.keys(sParams);
+        var keyVals = keys.map(function(v) { 
+            return sParams[v]; 
+        });
+        return keyVals.join('/') + '/';
+    }
+
+    function setDateURL(title){
+        var setOrNot = typeof changeDateURL !== typeof undefined ? true : false;
+        if(!setOrNot) return false;
+        
+        var curDate = $('#calendar').fullCalendar('getDate');
+        var curView = $('#calendar').fullCalendar('getView').name;
+        y = curDate.get('year');
+        m = curDate.get('month') + 1;
+        d = curDate.get('date');
+        sParams = {
+            'view' : curView,
+            'year' : y,
+            'month' : m,
+            'day' : d
+        }
+        var baseURL = "{{ base_url }}";
+        var newURL = baseURL + setURLPath(sParams);
+        //window.location = newURL;
+        window.history.pushState(title, title, newURL);
+        next_param = {
+            'next' : newURL,
+        };
+        start_param = {
+            'start_date' : y + '-' + m + '-' + d
+        };
+
+        $(".start-date-link").attr('href', function(){
+            return setURLParameters($(this).attr('href'), start_param);
+        });
+        $(".next-link").attr('href', function(){
+            return setURLParameters($(this).attr('href'), next_param);
+        });
+        $(".month-link").attr('href', function(){
+            sParams = {
+                'year' : y,
+                'month' : m,
+            }
+            baseURL = $(this).attr('baseurl');
+            return baseURL + setURLPath(sParams); 
+        });
+    }
+
+    function ifNotTempVar(tempVar, other){
+        return (tempVar.length == 0) ? other : tempVar;
+    }
+
+    function createEventRedirect(start, end, jsEvent, view){
+        $.ajax({
+            type: 'POST',
+            url: "{% url 'api_select_create' %}",
+            dataType: 'json',
+            data : {
+                'start': start.toISOString(),
+                'end' : end.toISOString(),
+                'calendar_slug' : '{{calendar_slug}}',
+            },
+            success : function(result) {
+                //console.log(result);
+                if (result.redirect) {
+                    window.location = setURLParameters(result.redirect, next_param);
+                }
+                if (result.success) $('#feedback input').attr('value', ''); 
+                $('#calendar').fullCalendar('refetchEvents');
+                },
+            error : function(req, status, error) {
+                console.log(error);
+            }
+        });
+        $('#calendar').fullCalendar('unselect');
+        return false;
+    }
+
+    function redirectToCreateEvent(start){
+        var eventCreateURL = "{% url 'calendar_create_event' request.user.base_profile.calendar.slug %}?next={{ request.get_full_path }}"
+        var baseURL = "{{ base_url }}";
+        var newURL = baseURL + setURLPath(sParams);
+        start_param = {
+            'next' : newURL,
+            'start_date' : y + '-' + m + '-' + d
+        };
+        //console.log(start.format('YYYY-MM-DD'));
+        //window.history.pushState(title, title, newURL);
+        window.location = setURLParameters(eventCreateURL, start_param);
+    }
+
+    var y = ifNotTempVar('{{ year }}');
+    var m = ifNotTempVar('{{ month }}');
+    var d = ifNotTempVar('{{ day }}');
+    var view = ifNotTempVar('{{ fcview }}', 'month');
+    var date = moment();
+
+    if (y && m && d){
+        date = moment(y + '-' + m + '-' + d);
+    }
+
+    var next_param = {
+            'next' : '{{ request.get_full_path }}',
+        };
+    var start_param = {
+            'start' : y + '-' + m + '-' + d,
+        };
 
     $('#calendar').fullCalendar({
+        defaultDate: date,
+        defaultView: view,
         header: {
             left: 'prev,next today',
             center: 'title',
@@ -124,11 +232,14 @@ $(document).ready(function() {
         eventRender: function(event, element) {
             var s = element[0].className;
             if(s.indexOf("fc-day-grid-event") < 0){
+                /*
                 title = element.children().find( '.fc-title' );
                 title.html('<a href="' + getEventViewURL(event) +
                     '">' + title.html() + '</a>')
+                */
                 if(event.editable && "{{ request.get_full_path }}".indexOf("/admin") != 0){
                     time = element.children().find( '.fc-time' );
+                    /*
                     var edit_button = document.createElement("button");
                     var edit_icon = document.createElement("span");
                     edit_button.className = 'btn btn-default btn-sm pull-right edit_event';
@@ -140,22 +251,32 @@ $(document).ready(function() {
                     edit_button.setAttribute('data-target', '#eventModal');
                     edit_icon.className = 'glyphicon glyphicon-pencil';
                     edit_button.appendChild(edit_icon);
+                    */
 
                     var delete_button = document.createElement("button");
                     var delete_icon = document.createElement("span");
-                    delete_button.className = 'btn btn-default btn-sm pull-right delete_event';
+                    delete_button.className = 't-btn pull-right delete_event';
                     delete_button.onclick = function(jsEvent){
                         jsEvent.preventDefault();
-                        setModalProperties('delete', event);
+                        setDeleteModalProperties(event);
                     };
                     delete_button.setAttribute('data-toggle', 'modal');
-                    delete_button.setAttribute('data-target', '#eventModal');
-                    delete_icon.className = 'glyphicon glyphicon-trash'
+                    delete_button.setAttribute('data-target', '#eventDeleteModal');
+                    delete_icon.className = 'glyphicon glyphicon-remove delete_event'
                     delete_button.appendChild(delete_icon);
 
                     time.prepend( '<br>' );
                     time.prepend( delete_button );
-                    time.prepend( edit_button );
+                    //time.prepend( edit_button );
+                }
+            }
+        },
+        eventClick: function(calEvent, jsEvent, view) {
+            if(calEvent.editable){
+                var clickClass = jsEvent.target.className;
+                if(clickClass.indexOf('delete_event') < 0){
+                    setChangeModalProperties(calEvent);
+                    $('#eventChangeModal').modal();
                 }
             }
         },
@@ -163,6 +284,7 @@ $(document).ready(function() {
                     if (allDay) {       
                         $('#calendar').fullCalendar('changeView', 'agendaWeek');
                         $("#calendar").fullCalendar('gotoDate', date);
+                        setDateURL("fc-button");
                     }
                 },
         eventDrop: function(event,delta,revertFunc) {
@@ -209,30 +331,20 @@ $(document).ready(function() {
             return false;
         },
         select: function( start, end, jsEvent, view  ) {
-            if(jsEvent.toElement.className == 'fc-bg'){
-                console.log('{{calendar_slug}}');
-                $.ajax({
-                        type: 'POST',
-                        url: "{% url 'api_select_create' %}",
-                        dataType: 'json',
-                        data : {
-                            'start': start.toISOString(),
-                            'end' : end.toISOString(),
-                            'calendar_slug' : '{{calendar_slug}}',
-                        },
-                        success : function(result) {
-                            console.log(result);
-                            if (result.success) $('#feedback input').attr('value', ''); 
-                            $('#calendar').fullCalendar('refetchEvents');
-                            },
-                        error : function(req, status, error) {
-                            console.log(error);
-                        }
-                    });
-                $('#calendar').fullCalendar('unselect');
-                return false;
+            if(['fc-bg', 'fc-content'].indexOf(jsEvent.toElement.className) > -1){
+                redirectToCreateEvent(start);
             }
         }
     });
+
+    setDateURL("initial");
+
+    $('.fc-button').click(function(event){
+        event.preventDefault();
+        setDateURL("fc-button");
+        $(this).css('background-color', 'white');
+    });
+    $('.fc-button').addClass('btn btn-default').removeClass('fc-state-default');
+
 });
 </script>

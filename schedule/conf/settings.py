@@ -6,8 +6,8 @@ AUTH_USER_MODEL = get_config('AUTH_USER_MODEL')
 # this controls behaviour of Period.classify_occurrence method
 SHOW_CANCELLED_OCCURRENCES = get_config('SHOW_CANCELLED_OCCURRENCES', False)
 
-# Callable used to check if a user has edit permissions to event
-# (and occurrence). Used by check_edit_permission decorator
+# Callable used to check if a user has edit permissions to event.
+# Used by check_edit_permission decorator
 # if ob==None we check permission to add occurrence
 CHECK_EVENT_PERM_FUNC = get_config('CHECK_EVENT_PERM_FUNC', None)
 
@@ -28,6 +28,7 @@ if not CHECK_OCCURRENCE_PERM_FUNC:
         return CHECK_EVENT_PERM_FUNC(ob.event, user)
     CHECK_OCCURRENCE_PERM_FUNC = check_occurrence_permission
 
+#Used to check whether the admin wants to use permissions
 CALENDAR_VIEW_PERM = get_config('CALENDAR_VIEW_PERM', False)
 
 # Callable used to check if a user has edit permissions to calendar
@@ -38,8 +39,6 @@ if not CHECK_CALENDAR_PERM_FUNC:
         return user.is_authenticated()
 
     CHECK_CALENDAR_PERM_FUNC = check_calendar_permission
-
-CALENDAR_VIEW_PERM = get_config('CALENDAR_VIEW_PERM', False)
 
 # Callable used to customize the event list given for a calendar and user
 # (e.g. all events on that calendar, those events plus another calendar's events,
@@ -57,6 +56,7 @@ OCCURRENCE_CANCEL_REDIRECT = get_config('OCCURRENCE_CANCEL_REDIRECT', None)
 
 SCHEDULER_PREVNEXT_LIMIT_SECONDS = get_config('SCHEDULER_PREVNEXT_LIMIT_SECONDS', 62208000)  # two years
 
+# Used to check if admin wants to use fullcalendar app or not
 USE_FULLCALENDAR = get_config('USE_FULLCALENDAR', False)
 
 #This name is used when a new event is created through selecting in fullcalendar

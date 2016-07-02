@@ -24,7 +24,8 @@ from schedule.models import Calendar, Occurrence, Event
 from schedule.periods import weekday_names
 from schedule.utils import (check_event_permissions, 
     check_calendar_permissions, coerce_date_dict, 
-    check_occurrence_permissions)
+    check_occurrence_permissions, split_event_after,
+    check_event_delete_permissions)
 
 
 class CalendarViewPermissionMixin(object):
@@ -39,6 +40,14 @@ class EventEditPermissionMixin(object):
     def as_view(cls, **initkwargs):
         view = super(EventEditPermissionMixin, cls).as_view(**initkwargs)
         return check_event_permissions(view)
+
+
+class EventDeletePermissionMixin(object):
+    @classmethod
+    def as_view(cls, **initkwargs):
+        view = super(EventDeletePermissionMixin, cls).as_view(**initkwargs)
+        return check_event_delete_permissions(view)
+
 
 class OccurrenceEditPermissionMixin(object):
     @classmethod
@@ -57,10 +66,18 @@ class TemplateKwargMixin(TemplateResponseMixin):
 
 class CancelButtonMixin(object):
     def post(self, request, *args, **kwargs):
-        next_url = kwargs.get('next', None)
-        self.success_url = get_next_url(request, next_url)
-        if "cancel" in request.POST:
-            return HttpResponseRedirect(self.success_url)
+        next_url = kwargs.get('next', request.GET.get('next', None))
+        self.success_url = get_next_url(request, next_url, True)
+        try:
+            self.object = self.get_object()
+            next_url = self.get_success_url()
+        except AttributeError:
+            url_val = 'fullcalendar' if USE_FULLCALENDAR else 'day_calendar'
+            next_url = self.success_url or self.kwargs.get('next', 
+                reverse(url_val, args=[self.object.calendar.slug])
+            )
+        if 'cancel' in request.POST:
+            return HttpResponseRedirect(next_url)
         else:
             return super(CancelButtonMixin, self).post(request, *args, **kwargs)
 
@@ -84,9 +101,14 @@ class FullCalendarView(CalendarMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super(FullCalendarView, self).get_context_data()
-        context = {
+        context.update({
             'calendar_slug': kwargs.get('calendar_slug'),
-        }
+            'year' : kwargs.get('year', None),
+            'month' : kwargs.get('month', None),
+            'day' : kwargs.get('day', None),
+            'fcview' : kwargs.get('fcview', None),
+            'base_url' : '/schedule/fullcalendar/' + kwargs.get('calendar_slug') + '/',
+        })
         return context
 
 
@@ -136,13 +158,13 @@ class CalendarByPeriodsView(CalendarMixin, DetailView):
         return context
 
 
-class OccurrenceMixin(CalendarViewPermissionMixin, TemplateKwargMixin):
+class OccurrenceMixin(CancelButtonMixin, CalendarViewPermissionMixin, TemplateKwargMixin):
     model = Occurrence
     pk_url_kwarg = 'occurrence_id'
     form_class = OccurrenceForm
 
 
-class OccurrenceEditMixin(CancelButtonMixin, OccurrenceEditPermissionMixin, OccurrenceMixin):
+class OccurrenceEditMixin(OccurrenceEditPermissionMixin, OccurrenceMixin):
     def get_initial(self):
         initial_data = super(OccurrenceEditMixin, self).get_initial()
         _, self.object = get_occurrence(**self.kwargs)
@@ -168,6 +190,22 @@ class OccurrencePreview(OccurrenceMixin, ModelFormMixin, ProcessFormView):
 class EditOccurrenceView(OccurrenceEditMixin, UpdateView):
     template_name = 'schedule/edit_occurrence.html'
 
+    def post(self, request, *args, **kwargs):
+        if 'delete' in request.POST:
+            self.object = self.get_object()
+            self.object.cancel()
+            url_val = 'fullcalendar' if USE_FULLCALENDAR else 'day_calendar'
+            return HttpResponseRedirect(request.GET.get('next', 
+                reverse(url_val, args=[self.object.calendar.slug])))
+        return super(EditOccurrenceView, self).post(request, *args, **kwargs)
+
+
+class EditAllAfterOccurrenceView(EditOccurrenceView):
+    def form_valid(self, form):
+        occurrence = form.save(commit=False)
+        split_event_after_occurrence(event, after)
+        return HttpResponseRedirect(self.get_success_url())
+
 
 class CreateOccurrenceView(OccurrenceEditMixin, CreateView):
     template_name = 'schedule/edit_occurrence.html'
@@ -178,8 +216,11 @@ class CancelOccurrenceView(OccurrenceEditMixin, ModelFormMixin, ProcessFormView)
 
     def post(self, request, *args, **kwargs):
         event, occurrence = get_occurrence(**kwargs)
-        self.success_url = kwargs.get('next',
-                        get_next_url(request, event.get_absolute_url()))
+        self.success_url = kwargs.get(
+            'next',
+            request.GET.get(
+                'next', 
+                get_next_url(request, event.get_absolute_url())))
         if "cancel" not in request.POST:
             occurrence.cancel()
         return HttpResponseRedirect(self.success_url)
@@ -191,6 +232,9 @@ class EventMixin(CalendarViewPermissionMixin, TemplateKwargMixin):
 
 
 class EventEditMixin(CancelButtonMixin, EventEditPermissionMixin, EventMixin):
+    pass
+
+class EventDeleteMixin(CancelButtonMixin, EventDeletePermissionMixin, EventMixin):
     pass
 
 
@@ -216,7 +260,29 @@ class EditEventView(EventEditMixin, UpdateView):
             original_end=F('original_end') + dte,
         )
         event.save()
-        return super(EditEventView, self).form_valid(form)
+        self.object = event
+        return HttpResponseRedirect(self.get_success_url())
+
+    def post(self, request, *args, **kwargs):
+        if 'delete' in request.POST:
+            self.object = self.get_object()
+            self.object.delete()
+            url_val = 'fullcalendar' if USE_FULLCALENDAR else 'day_calendar'
+            return HttpResponseRedirect(request.GET.get('next', 
+                reverse(url_val, args=[self.object.calendar.slug])))
+        return super(EditEventView, self).post(request, *args, **kwargs)
+
+class EditAllEventView(EditEventView):
+    def form_valid(self, form):
+        event = form.save(commit=True)
+        event.occurrence_set.all().update(
+            original_start=event.start,
+            original_end=event.end,
+            #start=event.start,
+            #end=event.end
+        )
+        self.object = event
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class CreateEventView(EventEditMixin, CreateView):
@@ -244,16 +310,12 @@ class CreateEventView(EventEditMixin, CreateView):
         event.creator = self.request.user
         event.calendar = get_object_or_404(Calendar, slug=self.kwargs['calendar_slug'])
         event.save()
-        return HttpResponseRedirect(event.get_absolute_url())
+        self.object = event
+        return HttpResponseRedirect(self.get_success_url())
 
 
-class DeleteEventView(EventEditMixin, DeleteView):
+class DeleteEventView(EventDeleteMixin, DeleteView):
     template_name = 'schedule/delete_event.html'
-
-    def get_context_data(self, **kwargs):
-        ctx = super(DeleteEventView, self).get_context_data(**kwargs)
-        ctx['next'] = self.get_success_url()
-        return ctx
 
     def get_success_url(self):
         """
@@ -264,8 +326,11 @@ class DeleteEventView(EventEditMixin, DeleteView):
         # Lastly redirect to the event detail of the recently create event
         """
         url_val = 'fullcalendar' if USE_FULLCALENDAR else 'day_calendar'
-        next_url = self.kwargs.get('next') or reverse(url_val, args=[self.object.calendar.slug])
-        next_url = get_next_url(self.request, next_url)
+        next_url = self.success_url or \
+            self.kwargs.get('next', 
+                reverse(url_val, args=[self.object.calendar.slug])
+            )
+        next_url = get_next_url(self.request, next_url, True)
         return next_url
 
 
@@ -301,7 +366,9 @@ def check_next_url(next_url):
     return next_url
 
 
-def get_next_url(request, default):
+def get_next_url(request, default, prefer_def=False):
+    if default and prefer_def:
+        return default
     next_url = default
     if OCCURRENCE_CANCEL_REDIRECT:
         next_url = OCCURRENCE_CANCEL_REDIRECT
@@ -362,7 +429,8 @@ def api_move_or_resize_by_code(request):
             occurrence.end += dt
             if not resize:
                 occurrence.start += dt
-            if CHECK_OCCURRENCE_PERM_FUNC(occurrence, request.user):
+            if CHECK_OCCURRENCE_PERM_FUNC(occurrence, request.user)\
+                    and CHECK_EVENT_PERM_FUNC(occurrence.event, request.user):
                 occurrence.save()
                 resp['status'] = "OK"
         else:
@@ -399,6 +467,11 @@ def api_select_create(request):
                                     )
 
         resp = {}
-        resp['status'] = "OK"
-
+        resp['status'] = "PERMISSION DENIED"
+        if CHECK_EVENT_PERM_FUNC(event, user):
+            event.save()
+            resp['status'] = "OK"
+            resp['redirect'] = reverse('edit_event', 
+                args=[calendar.slug, event.id]
+            )
     return HttpResponse(json.dumps(resp))

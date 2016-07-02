@@ -1,6 +1,7 @@
 from functools import wraps
 import pytz
 import heapq
+import datetime
 from annoying.functions import get_object_or_None
 from django.http import HttpResponseRedirect, HttpResponseNotFound
 from django.conf import settings
@@ -11,6 +12,8 @@ from schedule.conf.settings import (
         CHECK_CALENDAR_PERM_FUNC,
         CHECK_OCCURRENCE_PERM_FUNC,
         CALENDAR_VIEW_PERM)
+
+from django.db.models import F
 
 class EventListManager(object):
     """
@@ -184,6 +187,34 @@ def check_event_permissions(function):
         return HttpResponseNotFound('<h1>Page not found</h1>')
     return decorator
 
+def check_event_deletable(user, calendar, event):
+    allowed = (CHECK_EVENT_PERM_FUNC(event, user) and \
+        CHECK_CALENDAR_PERM_FUNC(calendar, user))
+    if allowed:
+        for occurrence in event.occurrence_set.all():
+            allowed = CHECK_OCCURRENCE_PERM_FUNC(
+                occurrence, user)
+            if not allowed:
+                break
+    return allowed
+
+def check_event_delete_permissions(function):
+    @wraps(function)
+    def decorator(request, *args, **kwargs):
+        from schedule.models import Event, Calendar, Occurrence
+        user = request.user
+        if not user:
+            return HttpResponseRedirect(settings.LOGIN_URL)
+        occurrence, event, calendar = get_objects(request, *args, **kwargs)
+        if calendar:
+            allowed = check_event_deletable(user, calendar, event)
+            if not allowed:
+                return HttpResponseRedirect(settings.LOGIN_URL)
+            # all checks passed
+            return function(request, *args, **kwargs)
+        return HttpResponseNotFound('<h1>Page not found</h1>')
+    return decorator
+
 def check_calendar_permissions(function):
     @wraps(function)
     def decorator(request, *args, **kwargs):
@@ -236,3 +267,44 @@ def get_model_bases():
         return [Model]
     else:
         return [import_string(x) for x in baseStrings]
+
+#def update_all_occurrences(new_event, old_event, occs):
+
+def split_event_after(event, after):
+    from schedule.models import Event
+    old_event = Event.objects.get(pk=event.pk)
+    if old_event.rule or event.rule:
+        event.pk = None
+        event.save()
+        if old_event.rule:
+            try:
+                new_start = next(old_event.occurrences_after(after)).start
+            except StopIteration:
+                new_start = None
+            old_event.end_recurring_period = after
+            old_event.save()
+
+        if event.rule:
+            try:
+                new_start = next(event.occurrences_after(after)).start
+            except StopIteration:
+                new_start = None
+        if new_start:
+            length = datetime.timedelta(minutes=
+                int((event.end-event.start).total_seconds() / 60)
+            )
+            time_diff = datetime.timedelta(minutes=
+                int((event.start-old_event.start).total_seconds() / 60)
+            )
+            event.start = new_start
+            event.end = new_start + length
+            old_event.occurrence_set.filter(
+                start__gte = after
+            ).update(
+                event=event,
+                original_start = event.start,
+                original_end = event.end,
+                start=F('start') + time_diff,
+                end=F('start') + length + time_diff
+            )
+    event.save()

@@ -5,11 +5,14 @@ from schedule.feeds import UpcomingEventsFeed
 from schedule.feeds import CalendarICalendar
 from schedule.periods import Year, Month, Week, Day
 from schedule.views import (
-        CalendarByPeriodsView, CalendarView, EventView,
-        OccurrenceView, EditOccurrenceView, DeleteEventView,
-        EditEventView, CreateEventView, OccurrencePreview,
-        CreateOccurrenceView, CancelOccurrenceView, FullCalendarView, 
-        api_select_create, api_move_or_resize_by_code, api_occurrences)
+    CalendarByPeriodsView, CalendarView, EventView,
+    OccurrenceView, EditOccurrenceView, DeleteEventView,
+    EditEventView, EditAllEventView, EditAllAfterOccurrenceView,
+    CreateEventView, OccurrencePreview, CreateOccurrenceView,
+    CancelOccurrenceView, FullCalendarView, 
+    api_select_create, api_move_or_resize_by_code, 
+    api_occurrences
+)
 
 urlpatterns = [
     # urls for Calendars
@@ -55,6 +58,9 @@ urlpatterns = [
     url(r'^fullcalendar/(?P<calendar_slug>[-\w]+)/$',
         FullCalendarView.as_view(), 
         name='fullcalendar'),
+    url(r'^fullcalendar/(?P<calendar_slug>[-\w]+)/(?P<fcview>[-\w]+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/$', 
+        FullCalendarView.as_view(), name='fullcalendar'
+    ),
 
     # Event Urls
     url(r'^event/create/(?P<calendar_slug>[-\w]+)/$',
@@ -63,6 +69,9 @@ urlpatterns = [
     url(r'^event/edit/(?P<calendar_slug>[-\w]+)/(?P<event_id>\d+)/$',
         EditEventView.as_view(),
         name='edit_event'),
+    url(r'^event/edit_all/(?P<calendar_slug>[-\w]+)/(?P<event_id>\d+)/$',
+        EditAllEventView.as_view(),
+        name='edit_all_event'),
     url(r'^event/(?P<event_id>\d+)/$',
         EventView.as_view(),
         name="event"),
@@ -80,6 +89,9 @@ urlpatterns = [
     url(r'^occurrence/edit/(?P<event_id>\d+)/(?P<occurrence_id>\d+)/$',
         EditOccurrenceView.as_view(),
         name="edit_occurrence"),
+    url(r'^event/edit_all_after/(?P<event_id>\d+)/(?P<occurrence_id>\d+)/$',
+        EditAllAfterOccurrenceView.as_view(),
+        name='edit_all_after_occurrence'),
 
     # urls for unpersisted occurrences
     url(r'^occurrence/(?P<event_id>\d+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/(?P<hour>\d+)/(?P<minute>\d+)/(?P<second>\d+)/$',
@@ -91,6 +103,9 @@ urlpatterns = [
     url(r'^occurrence/edit/(?P<event_id>\d+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/(?P<hour>\d+)/(?P<minute>\d+)/(?P<second>\d+)/$',
         CreateOccurrenceView.as_view(),
         name="edit_occurrence_by_date"),
+    url(r'^event/edit_all_after/(?P<event_id>\d+)/(?P<year>\d+)/(?P<month>\d+)/(?P<day>\d+)/(?P<hour>\d+)/(?P<minute>\d+)/(?P<second>\d+)/$',
+        EditAllAfterOccurrenceView.as_view(),
+        name='edit_all_after_occurrence'),
 
     # feed urls
     url(r'^feed/calendar/upcoming/(.*)/$', UpcomingEventsFeed(), name='upcoming_events_feed'),

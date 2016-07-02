@@ -5,6 +5,9 @@ from django.conf import settings as django_settings
 import pytz
 from dateutil import rrule
 import datetime
+from dateutil.rrule import DAILY, MONTHLY, WEEKLY, YEARLY, HOURLY, MINUTELY, SECONDLY
+
+from itertools import islice
 
 from django.contrib.contenttypes import fields
 from django.db import models
@@ -145,8 +148,6 @@ class Event(with_metaclass(ModelBase, *get_model_bases())):
                 return rrule.rrule(frequency, dtstart=self.start, until=self.start.replace(year=year))
 
     def _create_occurrence(self, start, end=None):
-        if timezone.is_naive(start) and django_settings.USE_TZ:
-            start = timezone.make_aware(start, timezone.utc)
         if end is None:
             end = start + (self.end - self.start)
         return Occurrence(event=self, start=start, end=end, original_start=start, original_end=end)
@@ -236,6 +237,36 @@ class Event(with_metaclass(ModelBase, *get_model_bases())):
             if (nxt is None):
                 raise StopIteration
             yield occ_replacer.get_occurrence(nxt)
+
+    def is_contained_in(self, event):
+        """
+        returns True/False of whether an event is entirely contained in another event, 
+        ignoring persisted occurrences. Useful for checking availabilities.
+        """
+        #if self.start > event.start and self.end < event.end_recurring_period:
+        params, empty = self.event_params
+        oparams, oempty = event.event_params
+
+        freq_order = freq_dict_order[self.rule.frequency]
+        o_freq_order = freq_dict_order[event.rule.frequency]
+
+        if ((oempty and not empty) or self.effective_start < event.effective_start 
+                or self.effective_end > event.effective_end or freq_order > o_freq_order):
+            return False
+        for param in oparams:
+            if not (param in params and set(params[param]).issubset(set(oparams[param]))):
+                return False
+        if freq_order == o_freq_order:
+            freq_dict_order = {
+                'YEARLY': 0,
+                'MONTHLY': 1,
+                'WEEKLY': 2,
+                'DAILY': 3,
+                'HOURLY': 4,
+                'MINUTELY': 5,
+                'SECONDLY': 6
+            }
+        return True    
 
     @property
     def event_start_params(self):
